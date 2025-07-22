@@ -1,3 +1,3 @@
 # f1
 
-f1 is a function that retruns a+b
+f1 is a funciton that returns a+b
