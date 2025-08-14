@@ -16,7 +16,7 @@ jobs:
     - name: Set up gcloud CLI
       uses: google-github-actions/setup-gcloud@v1
       with:
-        credentials_json: `${{secrets.SERVICE_ACCOUNT_KEY}}`
+        credentials_json: ${{ secrets.SERVICE_ACCOUNT_KEY }}
 
     - name: Copy files to GCP VM
       run: |
