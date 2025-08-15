@@ -16,7 +16,18 @@ jobs:
     - name: Set up gcloud CLI
       uses: google-github-actions/setup-gcloud@v1
       with:
+        project_id: ${{ secrets.GCP_PROJECT_ID }}
         credentials_json: ${{ secrets.SERVICE_ACCOUNT_KEY }}
+
+    - name: Authenticate gcloud and set config
+      run: |
+        echo "${{ secrets.SERVICE_ACCOUNT_KEY }}" > key.json
+        gcloud auth activate-service-account --key-file=key.json
+        gcloud config set project ${{ secrets.GCP_PROJECT_ID }}
+        gcloud config list account
+
+    - name: Prepare SSH directory
+      run: mkdir -p ~/.ssh
 
     - name: Copy files to GCP VM
       run: |
