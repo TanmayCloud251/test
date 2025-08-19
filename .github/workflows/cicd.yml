@@ -8,29 +8,50 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-
+    
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
-
-    - name: Set up gcloud CLI
-      uses: google-github-actions/setup-gcloud@v1
-      with:
-        project_id: ${{ secrets.GCP_PROJECT_ID }}
-        credentials_json: ${{ secrets.SERVICE_ACCOUNT_KEY }}
-
-    - name: Authenticate gcloud and set config
-      run: |
-        echo "${{ secrets.SERVICE_ACCOUNT_KEY }}" > key.json
-        gcloud auth activate-service-account --key-file=key.json
-        gcloud config set project ${{ secrets.GCP_PROJECT_ID }}
-        gcloud config list account
-
-    - name: Prepare SSH directory
-      run: mkdir -p ~/.ssh
-
-    - name: Copy files to GCP VM
-      run: |
-        gcloud compute scp --recurse ./ \
-          tanmaymi251@ubuntu-4gb:~/test \
-          --zone=us-central1-c
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Authenticate to Google Cloud
+        run: |
+          echo '${{ secrets.SERVICE_ACCOUNT_KEY }}' > gcp-key.json
+          gcloud auth activate-service-account --key-file=gcp-key.json
+          rm gcp-key.json
+      
+      - name: Set up gcloud CLI
+        uses: google-github-actions/setup-gcloud@v2
+      
+      - name: Configure gcloud and verify authentication
+        run: |
+          gcloud config set project ${{ secrets.GCP_PROJECT_ID }}
+          
+          echo "=== All authenticated accounts ==="
+          gcloud auth list
+          
+          echo "=== Active accounts only ==="
+          gcloud auth list --filter=status:ACTIVE --format="value(account)"
+          
+          # Set the active account explicitly
+          ACTIVE_ACCOUNT=$(gcloud auth list --filter=status:ACTIVE --format="value(account)" | head -1)
+          if [ ! -z "$ACTIVE_ACCOUNT" ]; then
+            gcloud config set account $ACTIVE_ACCOUNT
+            echo "Set active account: $ACTIVE_ACCOUNT"
+            
+            echo "=== Final gcloud config ==="
+            gcloud config list
+          else
+            echo "❌ No active account found"
+            echo "All accounts:"
+            gcloud auth list
+            exit 1
+          fi
+      
+      - name: Copy files to GCP VM
+        run: |
+          # Create SSH directory and accept prompts automatically
+          mkdir -p ~/.ssh
+          echo "y" | gcloud compute scp --recurse ./ \
+            tanmaymi251@ubuntu-4gb:~/test \
+            --zone=us-central1-c \
+            --ssh-key-expire-after=1h
