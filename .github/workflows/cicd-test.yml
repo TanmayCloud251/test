@@ -28,10 +28,10 @@ jobs:
 
     - name: Copy files to GCP VM
       run: |
-          echo "y" | gcloud compute scp --recurse ./ \
-            tanmaymi251@ubuntu-4gb:~/test \
-            --zone=us-central1-c \
-            --ssh-key-expire-after=1h
+        tar --exclude='.git' -czf app.tar.gz .
+        gcloud compute scp app.tar.gz tanmaymi251@ubuntu-4gb:~/test --zone=us-central1-c
+        gcloud compute ssh tanmaymi251@ubuntu-4gb --zone=us-central1-c --command="cd ~/test && tar -xzf app.tar.gz && rm app.tar.gz"
+
 
             
     - name: Run remote deployment script
