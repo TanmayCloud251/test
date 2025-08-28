@@ -27,7 +27,6 @@ jobs:
 
      - name: Copy files to GCP VM
         run: |
-          # Create SSH directory and accept prompts automatically
           mkdir -p ~/.ssh
           echo "y" | gcloud compute scp --recurse ./ \
             tanmaymi251@ubuntu-4gb:~/test \
