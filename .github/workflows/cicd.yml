@@ -47,8 +47,6 @@ jobs:
       
       - name: Copy files to GCP VM
         run: |
-          mkdir -p ~/.ssh
-          
           # Create archive with warning suppression and better exclusions
           tar czf code.tar.gz \
             --exclude='.git' \
@@ -58,25 +56,6 @@ jobs:
             --warning=no-file-changed \
             .
           
-          # Check VM status first
-          gcloud compute instances describe ubuntu-4gb --zone=us-central1-c --format="value(status)"
-          
-          # Create target directory first (separate command)
-          gcloud compute ssh tanmaymi251@ubuntu-4gb \
-            --zone=us-central1-c \
-            --command="mkdir -p ~/test" \
-            --ssh-flag="-o StrictHostKeyChecking=no" \
-            --ssh-flag="-o UserKnownHostsFile=/dev/null"
-          
-          # Copy file
-          gcloud compute scp code.tar.gz tanmaymi251@ubuntu-4gb:~/test/ \
-            --zone=us-central1-c \
-            --ssh-flag="-o StrictHostKeyChecking=no" \
-            --ssh-flag="-o UserKnownHostsFile=/dev/null"
-          
-          # Extract and cleanup
-          gcloud compute ssh tanmaymi251@ubuntu-4gb \
-            --zone=us-central1-c \
-            --command="cd ~/test && tar xzf code.tar.gz && rm code.tar.gz" \
-            --ssh-flag="-o StrictHostKeyChecking=no" \
-            --ssh-flag="-o UserKnownHostsFile=/dev/null"
+          # Simple one-liner deployment (similar to your original)
+          gcloud compute scp code.tar.gz tanmaymi251@ubuntu-4gb:~ --zone=us-central1-c && \
+          gcloud compute ssh tanmaymi251@ubuntu-4gb --zone=us-central1-c --command="mkdir -p ~/test && mv ~/code.tar.gz ~/test/ && cd ~/test && tar xzf code.tar.gz && rm code.tar.gz"
