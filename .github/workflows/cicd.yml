@@ -43,14 +43,24 @@ jobs:
           tar czf ../code.tar.gz .
           cd ..
       
-      # Option 1: Use startup script (recommended for simple deployments)
-      - name: Deploy via startup script
+      # SOLUTION 1: Use Cloud Storage (recommended - avoids SSH issues)
+      - name: Deploy via Cloud Storage
         run: |
-          # Create a deployment script
+          # Upload to Cloud Storage bucket
+          gsutil mb -p ${{ secrets.GCP_PROJECT_ID }} gs://${{ secrets.GCP_PROJECT_ID }}-deployments || true
+          gsutil cp code.tar.gz gs://${{ secrets.GCP_PROJECT_ID }}-deployments/latest.tar.gz
+          
+          # Create deployment script
           cat > deploy-script.sh << 'EOF'
           #!/bin/bash
-          cd ~/test
+          echo "Starting deployment..."
           mkdir -p ~/test
+          cd ~/test
+          
+          # Download latest code
+          gsutil cp gs://PROJECT_ID-deployments/latest.tar.gz ./
+          tar xzf latest.tar.gz
+          rm latest.tar.gz
           
           # Your deployment commands here
           # Example for Node.js app:
@@ -60,25 +70,41 @@ jobs:
           echo "Deployment completed at $(date)"
           EOF
           
-          # Copy files and script to VM
-          gcloud compute scp code.tar.gz deploy-script.sh tanmaymi251@ubuntu-4gb:~/ \
-            --zone=us-central1-c
+          # Replace PROJECT_ID placeholder
+          sed -i "s/PROJECT_ID/${{ secrets.GCP_PROJECT_ID }}/g" deploy-script.sh
           
-          # Execute deployment
+          # Upload deployment script
+          gsutil cp deploy-script.sh gs://${{ secrets.GCP_PROJECT_ID }}-deployments/
+          
+          # Execute deployment (this should work if VM has proper service account)
           gcloud compute ssh tanmaymi251@ubuntu-4gb \
             --zone=us-central1-c \
-            --command="cd ~ && tar xzf code.tar.gz -C test/ && chmod +x deploy-script.sh && ./deploy-script.sh && rm code.tar.gz deploy-script.sh"
+            --command="gsutil cp gs://${{ secrets.GCP_PROJECT_ID }}-deployments/deploy-script.sh ~/ && chmod +x ~/deploy-script.sh && ~/deploy-script.sh && rm ~/deploy-script.sh"
       
-      # Option 2: Alternative using instance templates (uncomment if needed)
-      # - name: Deploy via instance update
+      # SOLUTION 2: Alternative SSH method (uncomment if you fix permissions)
+      # - name: Deploy via SSH with explicit key setup
       #   run: |
-      #     # Upload to Cloud Storage bucket first
-      #     gsutil cp code.tar.gz gs://${{ secrets.GCP_BUCKET }}/deployments/
+      #     # Set up SSH directory and auto-accept prompts
+      #     mkdir -p ~/.ssh
+      #     echo "Host *" > ~/.ssh/config
+      #     echo "  StrictHostKeyChecking no" >> ~/.ssh/config
+      #     echo "  UserKnownHostsFile=/dev/null" >> ~/.ssh/config
       #     
-      #     # Download and deploy on VM
+      #     # Try SCP with force overwrite
+      #     echo "yes" | gcloud compute scp code.tar.gz tanmaymi251@ubuntu-4gb:~/test/ \
+      #       --zone=us-central1-c \
+      #       --force-key-file-overwrite
+      #     
+      #     # Execute deployment
       #     gcloud compute ssh tanmaymi251@ubuntu-4gb \
       #       --zone=us-central1-c \
-      #       --command="gsutil cp gs://${{ secrets.GCP_BUCKET }}/deployments/code.tar.gz ~/test/ && cd ~/test && tar xzf code.tar.gz && rm code.tar.gz"
+      #       --command="cd ~/test && tar xzf code.tar.gz && rm code.tar.gz"
+      
+      # Option 2: Alternative using Cloud Storage (uncomment if needed)
+      # - name: Deploy via Cloud Storage alternative
+      #   run: |
+      #     # If the above doesn't work, you can also use instance startup scripts
+      #     # or deploy via Cloud Build instead
       
       - name: Clean up
         run: |
