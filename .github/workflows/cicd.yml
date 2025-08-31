@@ -47,25 +47,7 @@ jobs:
       
       - name: Copy files to GCP VM
         run: |
-          # Create archive with warning suppression and better exclusions
-          tar czf code.tar.gz \
-            --exclude='.git' \
-            --exclude='node_modules' \
-            --exclude='.github' \
-            --exclude='gha-creds-*.json' \
-            --warning=no-file-changed \
-            .
-          
-          # Check VM status and restart if needed
-          VM_STATUS=$(gcloud compute instances describe ubuntu-4gb --zone=us-central1-c --format="value(status)")
-          echo "VM Status: $VM_STATUS"
-          
-          if [ "$VM_STATUS" != "RUNNING" ]; then
-            echo "Starting VM..."
-            gcloud compute instances start ubuntu-4gb --zone=us-central1-c
-            sleep 30
-          fi
-          
-          # Simple deployment (back to basics)
-          gcloud compute scp code.tar.gz tanmaymi251@ubuntu-4gb:~ --zone=us-central1-c
-          gcloud compute ssh tanmaymi251@ubuntu-4gb --zone=us-central1-c --command="mkdir -p ~/test && mv ~/code.tar.gz ~/test/ && cd ~/test && tar xzf code.tar.gz && rm code.tar.gz"
+          mkdir -p ~/.ssh
+          tar czf code.tar.gz --exclude='.git' --warning=no-file-changed .
+          echo "y" | gcloud compute scp code.tar.gz tanmaymi251@ubuntu-4gb:~/test --zone=us-central1-c --ssh-key-expire-after=1h
+          echo "y" | gcloud compute ssh tanmaymi251@ubuntu-4gb --zone=us-central1-c --command="tar xzf ~/test/code.tar.gz -C ~/test && rm ~/test/code.tar.gz"
