@@ -58,13 +58,25 @@ jobs:
             --warning=no-file-changed \
             .
           
-          # Force key file overwrite and skip host key checking
-          gcloud compute scp code.tar.gz tanmaymi251@ubuntu-4gb:~/test \
-            --zone=us-central1-c \
-            --force-key-file-overwrite \
-            --ssh-flag="-o StrictHostKeyChecking=no"
+          # Check VM status first
+          gcloud compute instances describe ubuntu-4gb --zone=us-central1-c --format="value(status)"
           
+          # Create target directory first (separate command)
           gcloud compute ssh tanmaymi251@ubuntu-4gb \
             --zone=us-central1-c \
-            --command="tar xzf ~/test/code.tar.gz -C ~/test && rm ~/test/code.tar.gz" \
-            --ssh-flag="-o StrictHostKeyChecking=no"
+            --command="mkdir -p ~/test" \
+            --ssh-flag="-o StrictHostKeyChecking=no" \
+            --ssh-flag="-o UserKnownHostsFile=/dev/null"
+          
+          # Copy file
+          gcloud compute scp code.tar.gz tanmaymi251@ubuntu-4gb:~/test/ \
+            --zone=us-central1-c \
+            --ssh-flag="-o StrictHostKeyChecking=no" \
+            --ssh-flag="-o UserKnownHostsFile=/dev/null"
+          
+          # Extract and cleanup
+          gcloud compute ssh tanmaymi251@ubuntu-4gb \
+            --zone=us-central1-c \
+            --command="cd ~/test && tar xzf code.tar.gz && rm code.tar.gz" \
+            --ssh-flag="-o StrictHostKeyChecking=no" \
+            --ssh-flag="-o UserKnownHostsFile=/dev/null"
