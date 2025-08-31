@@ -16,20 +16,12 @@ jobs:
         uses: google-github-actions/auth@v2
         with:
           credentials_json: '${{ secrets.SERVICE_ACCOUNT_KEY }}'
+          project_id: '${{ secrets.GCP_PROJECT_ID }}'
       
       - name: Set up gcloud CLI
         uses: google-github-actions/setup-gcloud@v2
-        with:
-          project_id: '${{ secrets.GCP_PROJECT_ID }}'
       
-      - name: Verify authentication
-        run: |
-          echo "=== Current gcloud config ==="
-          gcloud config list
-          echo "=== Testing authentication ==="
-          gcloud compute instances list --limit=1
-      
-      - name: Prepare and copy files to GCP VM
+      - name: Prepare deployment files
         run: |
           # Create a clean directory for deployment
           mkdir -p deploy-temp
@@ -43,29 +35,51 @@ jobs:
             --exclude='.DS_Store' \
             --exclude='coverage' \
             --exclude='dist' \
-            --exclude='build'
+            --exclude='build' \
+            --exclude='gha-creds-*.json'
           
           # Create archive from clean directory
           cd deploy-temp
           tar czf ../code.tar.gz .
           cd ..
+      
+      # Option 1: Use startup script (recommended for simple deployments)
+      - name: Deploy via startup script
+        run: |
+          # Create a deployment script
+          cat > deploy-script.sh << 'EOF'
+          #!/bin/bash
+          cd ~/test
+          mkdir -p ~/test
           
-          # Ensure target directory exists on VM
+          # Your deployment commands here
+          # Example for Node.js app:
+          # npm install
+          # pm2 restart app || pm2 start app.js --name app
+          
+          echo "Deployment completed at $(date)"
+          EOF
+          
+          # Copy files and script to VM
+          gcloud compute scp code.tar.gz deploy-script.sh tanmaymi251@ubuntu-4gb:~/ \
+            --zone=us-central1-c
+          
+          # Execute deployment
           gcloud compute ssh tanmaymi251@ubuntu-4gb \
             --zone=us-central1-c \
-            --ssh-key-expire-after=1h \
-            --command="mkdir -p ~/test"
-          
-          # Copy archive to VM
-          gcloud compute scp code.tar.gz tanmaymi251@ubuntu-4gb:~/test/ \
-            --zone=us-central1-c \
-            --ssh-key-expire-after=1h
-          
-          # Extract on VM and clean up
-          gcloud compute ssh tanmaymi251@ubuntu-4gb \
-            --zone=us-central1-c \
-            --ssh-key-expire-after=1h \
-            --command="cd ~/test && tar xzf code.tar.gz && rm code.tar.gz"
-          
-          # Clean up local files
+            --command="cd ~ && tar xzf code.tar.gz -C test/ && chmod +x deploy-script.sh && ./deploy-script.sh && rm code.tar.gz deploy-script.sh"
+      
+      # Option 2: Alternative using instance templates (uncomment if needed)
+      # - name: Deploy via instance update
+      #   run: |
+      #     # Upload to Cloud Storage bucket first
+      #     gsutil cp code.tar.gz gs://${{ secrets.GCP_BUCKET }}/deployments/
+      #     
+      #     # Download and deploy on VM
+      #     gcloud compute ssh tanmaymi251@ubuntu-4gb \
+      #       --zone=us-central1-c \
+      #       --command="gsutil cp gs://${{ secrets.GCP_BUCKET }}/deployments/code.tar.gz ~/test/ && cd ~/test && tar xzf code.tar.gz && rm code.tar.gz"
+      
+      - name: Clean up
+        run: |
           rm -rf deploy-temp code.tar.gz
