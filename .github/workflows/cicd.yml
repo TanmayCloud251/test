@@ -56,16 +56,16 @@ jobs:
             --warning=no-file-changed \
             .
           
-          # Debug: Check what we have
-          echo "=== Files created ==="
-          ls -la code.tar.gz
+          # Check VM status and restart if needed
+          VM_STATUS=$(gcloud compute instances describe ubuntu-4gb --zone=us-central1-c --format="value(status)")
+          echo "VM Status: $VM_STATUS"
           
-          echo "=== VM Status ==="
-          gcloud compute instances describe ubuntu-4gb --zone=us-central1-c --format="value(status)"
+          if [ "$VM_STATUS" != "RUNNING" ]; then
+            echo "Starting VM..."
+            gcloud compute instances start ubuntu-4gb --zone=us-central1-c
+            sleep 30
+          fi
           
-          # Try SCP with verbose output
-          echo "=== Attempting SCP ==="
-          gcloud compute scp code.tar.gz tanmaymi251@ubuntu-4gb:~ --zone=us-central1-c --verbosity=debug
-          
-          echo "=== Attempting SSH ==="
-          gcloud compute ssh tanmaymi251@ubuntu-4gb --zone=us-central1-c --command="mkdir -p ~/test && mv ~/code.tar.gz ~/test/ && cd ~/test && tar xzf code.tar.gz && rm code.tar.gz" --verbosity=debug
+          # Simple deployment (back to basics)
+          gcloud compute scp code.tar.gz tanmaymi251@ubuntu-4gb:~ --zone=us-central1-c
+          gcloud compute ssh tanmaymi251@ubuntu-4gb --zone=us-central1-c --command="mkdir -p ~/test && mv ~/code.tar.gz ~/test/ && cd ~/test && tar xzf code.tar.gz && rm code.tar.gz"
