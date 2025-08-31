@@ -46,8 +46,14 @@ jobs:
           fi
       
       - name: Copy files to GCP VM
+        env:
+          CLOUDSDK_CORE_DISABLE_PROMPTS: 1
         run: |
           mkdir -p ~/.ssh
           tar czf code.tar.gz --exclude='.git' --warning=no-file-changed .
-          echo "y" | gcloud compute scp code.tar.gz tanmaymi251@ubuntu-4gb:~/test --zone=us-central1-c --ssh-key-expire-after=1h
-          echo "y" | gcloud compute ssh tanmaymi251@ubuntu-4gb --zone=us-central1-c --command="tar xzf ~/test/code.tar.gz -C ~/test && rm ~/test/code.tar.gz"
+          
+          # Set gcloud to use service account explicitly
+          gcloud config set auth/disable_credentials false
+          
+          gcloud compute scp code.tar.gz tanmaymi251@ubuntu-4gb:~/test --zone=us-central1-c --ssh-key-expire-after=1h
+          gcloud compute ssh tanmaymi251@ubuntu-4gb --zone=us-central1-c --command="tar xzf ~/test/code.tar.gz -C ~/test && rm ~/test/code.tar.gz"
