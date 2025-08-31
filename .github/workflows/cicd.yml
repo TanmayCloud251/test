@@ -1,5 +1,4 @@
 name: Deploy to GCP VM
-
 on:
   push:
     branches:
@@ -11,45 +10,62 @@ jobs:
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       
       - name: Authenticate to Google Cloud
-        run: |
-          echo '${{ secrets.SERVICE_ACCOUNT_KEY }}' > gcp-key.json
-          gcloud auth activate-service-account --key-file=gcp-key.json
-          rm gcp-key.json
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: '${{ secrets.SERVICE_ACCOUNT_KEY }}'
       
       - name: Set up gcloud CLI
         uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: '${{ secrets.GCP_PROJECT_ID }}'
       
-      - name: Configure gcloud and verify authentication
+      - name: Verify authentication
         run: |
-          gcloud config set project ${{ secrets.GCP_PROJECT_ID }}
-          
-          echo "=== All authenticated accounts ==="
-          gcloud auth list
-          
-          echo "=== Active accounts only ==="
-          gcloud auth list --filter=status:ACTIVE --format="value(account)"
-          
-          # Set the active account explicitly
-          ACTIVE_ACCOUNT=$(gcloud auth list --filter=status:ACTIVE --format="value(account)" | head -1)
-          if [ ! -z "$ACTIVE_ACCOUNT" ]; then
-            gcloud config set account $ACTIVE_ACCOUNT
-            echo "Set active account: $ACTIVE_ACCOUNT"
-            
-            echo "=== Final gcloud config ==="
-            gcloud config list
-          else
-            echo "❌ No active account found"
-            echo "All accounts:"
-            gcloud auth list
-            exit 1
-          fi
+          echo "=== Current gcloud config ==="
+          gcloud config list
+          echo "=== Testing authentication ==="
+          gcloud compute instances list --limit=1
       
-      - name: Copy files to GCP VM
+      - name: Prepare and copy files to GCP VM
         run: |
-          mkdir -p ~/.ssh
-          tar czf code.tar.gz --exclude='.git' .
-          echo "y" | gcloud compute scp code.tar.gz tanmaymi251@ubuntu-4gb:~/test --zone=us-central1-c --ssh-key-expire-after=1h
-          echo "y" | gcloud compute ssh tanmaymi251@ubuntu-4gb --zone=us-central1-c --command="tar xzf ~/test/code.tar.gz -C ~/test && rm ~/test/code.tar.gz"
+          # Create a clean directory for deployment
+          mkdir -p deploy-temp
+          
+          # Copy only necessary files (exclude common unwanted files)
+          rsync -av --progress . deploy-temp/ \
+            --exclude='.git' \
+            --exclude='node_modules' \
+            --exclude='.env*' \
+            --exclude='*.log' \
+            --exclude='.DS_Store' \
+            --exclude='coverage' \
+            --exclude='dist' \
+            --exclude='build'
+          
+          # Create archive from clean directory
+          cd deploy-temp
+          tar czf ../code.tar.gz .
+          cd ..
+          
+          # Ensure target directory exists on VM
+          gcloud compute ssh tanmaymi251@ubuntu-4gb \
+            --zone=us-central1-c \
+            --ssh-key-expire-after=1h \
+            --command="mkdir -p ~/test"
+          
+          # Copy archive to VM
+          gcloud compute scp code.tar.gz tanmaymi251@ubuntu-4gb:~/test/ \
+            --zone=us-central1-c \
+            --ssh-key-expire-after=1h
+          
+          # Extract on VM and clean up
+          gcloud compute ssh tanmaymi251@ubuntu-4gb \
+            --zone=us-central1-c \
+            --ssh-key-expire-after=1h \
+            --command="cd ~/test && tar xzf code.tar.gz && rm code.tar.gz"
+          
+          # Clean up local files
+          rm -rf deploy-temp code.tar.gz
