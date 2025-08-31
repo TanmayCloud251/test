@@ -48,7 +48,15 @@ jobs:
       - name: Copy files to GCP VM
         run: |
           mkdir -p ~/.ssh
-          tar czf code.tar.gz --exclude='.git' --exclude='node_modules' .
+          
+          # Create archive with warning suppression and better exclusions
+          tar czf code.tar.gz \
+            --exclude='.git' \
+            --exclude='node_modules' \
+            --exclude='.github' \
+            --exclude='gha-creds-*.json' \
+            --warning=no-file-changed \
+            .
           
           # Force key file overwrite and skip host key checking
           gcloud compute scp code.tar.gz tanmaymi251@ubuntu-4gb:~/test \
