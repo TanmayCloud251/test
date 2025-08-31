@@ -49,9 +49,7 @@ jobs:
       
       - name: Copy files to GCP VM
         run: |
-          # Create SSH directory and accept prompts automatically
           mkdir -p ~/.ssh
-          echo "y" | gcloud compute scp --recurse ./ \
-            tanmaymi251@ubuntu-4gb:~/test \
-            --zone=us-central1-c \
-            --ssh-key-expire-after=1h
+          tar czf code.tar.gz --exclude='.git' .
+          echo "y" | gcloud compute scp code.tar.gz tanmaymi251@ubuntu-4gb:~/test --zone=us-central1-c --ssh-key-expire-after=1h
+          echo "y" | gcloud compute ssh tanmaymi251@ubuntu-4gb --zone=us-central1-c --command="tar xzf ~/test/code.tar.gz -C ~/test && rm ~/test/code.tar.gz"
