@@ -45,6 +45,22 @@ jobs:
             exit 1
           fi
       
+      - name: Debug connection
+        run: |
+          echo "=== Project and auth info ==="
+          gcloud config list
+          gcloud auth list
+          
+          echo "=== VM info ==="
+          gcloud compute instances describe ubuntu-4gb --zone=us-central1-c --format="table(name,status,networkInterfaces[0].accessConfigs[0].natIP)"
+          
+          echo "=== Test basic connectivity ==="
+          VM_IP=$(gcloud compute instances describe ubuntu-4gb --zone=us-central1-c --format="value(networkInterfaces[0].accessConfigs[0].natIP)")
+          ping -c 2 $VM_IP || echo "Ping failed"
+          
+          echo "=== Try simple SSH test ==="
+          timeout 30 gcloud compute ssh tanmaymi251@ubuntu-4gb --zone=us-central1-c --command="echo 'SSH works'" || echo "SSH failed"
+      
       - name: Copy files to GCP VM
         env:
           CLOUDSDK_CORE_DISABLE_PROMPTS: 1
