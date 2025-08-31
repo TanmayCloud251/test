@@ -61,15 +61,36 @@ jobs:
           echo "=== Try simple SSH test ==="
           timeout 30 gcloud compute ssh tanmaymi251@ubuntu-4gb --zone=us-central1-c --command="echo 'SSH works'" || echo "SSH failed"
       
-      - name: Copy files to GCP VM
-        env:
-          CLOUDSDK_CORE_DISABLE_PROMPTS: 1
+      - name: Deploy via startup script (network-friendly)
         run: |
-          mkdir -p ~/.ssh
           tar czf code.tar.gz --exclude='.git' --warning=no-file-changed .
           
-          # Set gcloud to use service account explicitly
-          gcloud config set auth/disable_credentials false
+          # Encode the archive as base64 for startup script
+          base64 -w 0 code.tar.gz > code.tar.gz.b64
           
-          gcloud compute scp code.tar.gz tanmaymi251@ubuntu-4gb:~/test --zone=us-central1-c --ssh-key-expire-after=1h
-          gcloud compute ssh tanmaymi251@ubuntu-4gb --zone=us-central1-c --command="tar xzf ~/test/code.tar.gz -C ~/test && rm ~/test/code.tar.gz"
+          # Create a startup script that downloads and deploys
+          cat > startup-script.sh << 'EOF'
+          #!/bin/bash
+          cd /tmp
+          echo "ENCODED_ARCHIVE_HERE" | base64 -d > code.tar.gz
+          mkdir -p /home/tanmaymi251/test
+          cd /home/tanmaymi251/test
+          tar xzf /tmp/code.tar.gz
+          rm /tmp/code.tar.gz
+          chown -R tanmaymi251:tanmaymi251 /home/tanmaymi251/test
+          echo "Deployment completed" > /home/tanmaymi251/deploy.log
+          EOF
+          
+          # Replace placeholder with actual encoded archive
+          ENCODED_ARCHIVE=$(cat code.tar.gz.b64)
+          sed -i "s/ENCODED_ARCHIVE_HERE/$ENCODED_ARCHIVE/" startup-script.sh
+          
+          # Update VM with startup script (this doesn't require SSH)
+          gcloud compute instances add-metadata ubuntu-4gb \
+            --zone=us-central1-c \
+            --metadata-from-file startup-script=startup-script.sh
+          
+          # Restart VM to trigger startup script
+          gcloud compute instances stop ubuntu-4gb --zone=us-central1-c
+          sleep 10
+          gcloud compute instances start ubuntu-4gb --zone=us-central1-c
