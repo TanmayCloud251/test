@@ -50,7 +50,7 @@ jobs:
         run: |
           echo "Startup script started"
           
-          tar czf code.tar.gz --exclude='.git' --warning=no-file-changed .
+          tar -czf code.tar.gz --exclude='.git' --warning=no-file-changed .
 
           echo "phase 0"
           
