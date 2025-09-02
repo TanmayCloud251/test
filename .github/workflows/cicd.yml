@@ -48,11 +48,16 @@ jobs:
       
       - name: Deploy via startup script (network-friendly)
         run: |
+          echo "Startup script started"
+          
           tar czf code.tar.gz --exclude='.git' --warning=no-file-changed .
+
+          echo "phase 0"
           
           # Encode the archive as base64 for startup script
           base64 -w 0 code.tar.gz > code.tar.gz.b64
-          
+
+          echo "Phase 1"
           # Create a startup script that downloads and deploys
           cat > startup-script.sh << 'EOF'
           #!/bin/bash
@@ -65,17 +70,24 @@ jobs:
           chown -R tanmaymi251:tanmaymi251 /home/tanmaymi251/test
           echo "Deployment completed" > /home/tanmaymi251/deploy.log
           EOF
-          
+
+          echo "phase 2"
           # Replace placeholder with actual encoded archive
           ENCODED_ARCHIVE=$(cat code.tar.gz.b64)
           sed -i "s/ENCODED_ARCHIVE_HERE/$ENCODED_ARCHIVE/" startup-script.sh
+
+          echo "phase 3"
           
           # Update VM with startup script (this doesn't require SSH)
           gcloud compute instances add-metadata ubuntu-4gb \
             --zone=us-central1-c \
             --metadata-from-file startup-script=startup-script.sh
+
+          echo "phase 4"
           
           # Restart VM to trigger startup script
           gcloud compute instances stop ubuntu-4gb --zone=us-central1-c
           sleep 10
           gcloud compute instances start ubuntu-4gb --zone=us-central1-c
+
+          echo "Startup script ended"
