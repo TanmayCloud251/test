@@ -48,46 +48,44 @@ jobs:
       
       - name: Deploy via startup script (network-friendly)
         run: |
-          echo "Startup script started"
+         echo "Startup script started"
           
-          tar -czf code.tar.gz --exclude='.git' --warning=no-file-changed .
-
-          echo "phase 0"
+          # Use zip instead of tar to avoid file-change issues
+          zip -r code.zip . -x '.git/*' 'node_modules/*' '*.log' '.github/*' 'gha-creds-*.json'
+          echo "Phase 0 - zip created"
           
           # Encode the archive as base64 for startup script
-          base64 -w 0 code.tar.gz > code.tar.gz.b64
-
-          echo "Phase 1"
+          base64 -w 0 code.zip > code.zip.b64
+          echo "Phase 1 - base64 encoded"
+          
           # Create a startup script that downloads and deploys
           cat > startup-script.sh << 'EOF'
           #!/bin/bash
           cd /tmp
-          echo "ENCODED_ARCHIVE_HERE" | base64 -d > code.tar.gz
+          echo "ENCODED_ARCHIVE_HERE" | base64 -d > code.zip
           mkdir -p /home/tanmaymi251/test
           cd /home/tanmaymi251/test
-          tar xzf /tmp/code.tar.gz
-          rm /tmp/code.tar.gz
+          unzip -o /tmp/code.zip
+          rm /tmp/code.zip
           chown -R tanmaymi251:tanmaymi251 /home/tanmaymi251/test
-          echo "Deployment completed" > /home/tanmaymi251/deploy.log
+          echo "Deployment completed at $(date)" > /home/tanmaymi251/deploy.log
           EOF
-
-          echo "phase 2"
+          echo "Phase 2 - startup script created"
+          
           # Replace placeholder with actual encoded archive
-          ENCODED_ARCHIVE=$(cat code.tar.gz.b64)
+          ENCODED_ARCHIVE=$(cat code.zip.b64)
           sed -i "s/ENCODED_ARCHIVE_HERE/$ENCODED_ARCHIVE/" startup-script.sh
-
-          echo "phase 3"
+          echo "Phase 3 - placeholder replaced"
           
           # Update VM with startup script (this doesn't require SSH)
           gcloud compute instances add-metadata ubuntu-4gb \
             --zone=us-central1-c \
             --metadata-from-file startup-script=startup-script.sh
-
-          echo "phase 4"
+          echo "Phase 4 - metadata updated"
           
           # Restart VM to trigger startup script
           gcloud compute instances stop ubuntu-4gb --zone=us-central1-c
-          sleep 10
+          echo "Phase 5 - VM stopping"
+          sleep 15
           gcloud compute instances start ubuntu-4gb --zone=us-central1-c
-
-          echo "Startup script ended"
+          echo "Phase 6 - VM started, deployment should complete automatically"
