@@ -1,4 +1,5 @@
 name: Deploy to GCP VM
+
 on:
   push:
     branches:
@@ -10,13 +11,13 @@ jobs:
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
       
       - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v2
-        with:
-          credentials_json: '${{ secrets.SERVICE_ACCOUNT_KEY }}'
-          project_id: '${{ secrets.GCP_PROJECT_ID }}'
+        run: |
+          echo '${{ secrets.SERVICE_ACCOUNT_KEY }}' > gcp-key.json
+          gcloud auth activate-service-account --key-file=gcp-key.json
+          rm gcp-key.json
       
       - name: Set up gcloud CLI
         uses: google-github-actions/setup-gcloud@v2
@@ -46,46 +47,11 @@ jobs:
             exit 1
           fi
       
-      - name: Deploy via startup script (network-friendly)
+      - name: Copy files to GCP VM
         run: |
-         echo "Startup script started"
-          
-          # Use zip instead of tar to avoid file-change issues
-          zip -r code.zip . -x '.git/*' 'node_modules/*' '*.log' '.github/*' 'gha-creds-*.json'
-          echo "Phase 0 - zip created"
-          
-          # Encode the archive as base64 for startup script
-          base64 -w 0 code.zip > code.zip.b64
-          echo "Phase 1 - base64 encoded"
-          
-          # Create a startup script that downloads and deploys
-          cat > startup-script.sh << 'EOF'
-          #!/bin/bash
-          cd /tmp
-          echo "ENCODED_ARCHIVE_HERE" | base64 -d > code.zip
-          mkdir -p /home/tanmaymi251/test
-          cd /home/tanmaymi251/test
-          unzip -o /tmp/code.zip
-          rm /tmp/code.zip
-          chown -R tanmaymi251:tanmaymi251 /home/tanmaymi251/test
-          echo "Deployment completed at $(date)" > /home/tanmaymi251/deploy.log
-          EOF
-          echo "Phase 2 - startup script created"
-          
-          # Replace placeholder with actual encoded archive
-          ENCODED_ARCHIVE=$(cat code.zip.b64)
-          sed -i "s/ENCODED_ARCHIVE_HERE/$ENCODED_ARCHIVE/" startup-script.sh
-          echo "Phase 3 - placeholder replaced"
-          
-          # Update VM with startup script (this doesn't require SSH)
-          gcloud compute instances add-metadata ubuntu-4gb \
+          # Create SSH directory and accept prompts automatically
+          mkdir -p ~/.ssh
+          echo "y" | gcloud compute scp --recurse ./ \
+            tanmaymi251@ubuntu-4gb:~/test \
             --zone=us-central1-c \
-            --metadata-from-file startup-script=startup-script.sh
-          echo "Phase 4 - metadata updated"
-          
-          # Restart VM to trigger startup script
-          gcloud compute instances stop ubuntu-4gb --zone=us-central1-c
-          echo "Phase 5 - VM stopping"
-          sleep 15
-          gcloud compute instances start ubuntu-4gb --zone=us-central1-c
-          echo "Phase 6 - VM started, deployment should complete automatically"
+            --ssh-key-expire-after=1h
